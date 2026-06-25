@@ -1,17 +1,15 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Serilog;
-using Serilog.Context;
 using Serilog.Templates;
 
-// Standardized JSON logging: timestamp, level, service, message + structured fields.
-// ExpressionTemplate gives full control over the emitted field names/shape.
+// Structured JSON logging via Serilog's ExpressionTemplate, shaped to the
+// shared schema: timestamp, level, service, message + request fields.
 Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
-    .Enrich.WithProperty("service", "dotnet")
     .MinimumLevel.Information()
     .WriteTo.Console(new ExpressionTemplate(
-        "{ {timestamp: @t, level: ToLower(@l), service: service, message: @m, method: method, path: path, status_code: status_code, duration_ms: duration_ms, upstream: upstream, error: error} }\n"))
+        "{ {timestamp: @t, level: @l, service: 'dotnet', message: @m, method: method, path: path, status_code: status_code, duration_ms: duration_ms, upstream: upstream, error: error} }\n"))
     .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
