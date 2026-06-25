@@ -244,8 +244,10 @@ spec:
 #   3. The SDK reads the OTEL_* env vars below to find the collector and
 #      name the service (no code-level endpoint config needed).
 #
-# OTLP traffic is sent to the EDOT Collector. Adjust the endpoint to match your
-# install (here: a collector Service named `opentelemetry-collector` on 4318).
+# OTLP traffic is sent to the EDOT Collector. The endpoint below targets the
+# opentelemetry-kube-stack daemon collector Service on 4318 — the same collector the
+# operator injects into the auto-instrumented services. Adjust it to match your install
+# (verify the Service name with `kubectl get svc -n opentelemetry-operator-system`).
 # -----------------------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
@@ -279,7 +281,7 @@ spec:
         - name: OTEL_SERVICE_NAME
           value: "all-language-ruby"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: "http://opentelemetry-collector.opentelemetry-operator-system:4318"
+          value: "http://opentelemetry-kube-stack-daemon-collector.opentelemetry-operator-system:4318"
         - name: OTEL_EXPORTER_OTLP_PROTOCOL
           value: "http/protobuf"
         - name: OTEL_RESOURCE_ATTRIBUTES
@@ -396,7 +398,7 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: "all-language-php"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://opentelemetry-collector.opentelemetry-operator-system:4318"
+              value: "http://opentelemetry-kube-stack-daemon-collector.opentelemetry-operator-system:4318"
             - name: OTEL_EXPORTER_OTLP_PROTOCOL
               value: "http/protobuf"
             - name: OTEL_RESOURCE_ATTRIBUTES

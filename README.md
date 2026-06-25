@@ -204,6 +204,29 @@ kubectl set env deploy/all-language-dotnet \
   CORECLR_PROFILER_PATH=/otel-auto-instrumentation-dotnet/$RID/OpenTelemetry.AutoInstrumentation.Native.so
 ```
 
+### Golang eBPF requires a native (non-emulated) image
+
+The Go agent is eBPF-based: it attaches uprobes to the **native** binary and discovers
+the process by its executable path. If the golang image is `amd64` running under Rosetta
+emulation on an arm64 node, the process's `/proc/<pid>/exe` resolves to `/run/rosetta/rosetta`
+(not `/app/hello-world`), so the agent polls forever and never attaches — and uprobes
+can't instrument a translated binary anyway. Build golang for the node's architecture:
+
+```bash
+docker build --platform linux/arm64 -f golang/Dockerfile -t kennethfoo49066/all-language-elastic-golang:latest .
+kind load docker-image kennethfoo49066/all-language-elastic-golang:latest --name kind
+kubectl rollout restart deploy/all-language-golang
+# Confirm attach: the sidecar log should reach "instrumentation loaded successfully, starting..."
+kubectl logs deploy/all-language-golang -c opentelemetry-auto-instrumentation | tail
+```
+
+The SDK-based services (node/python/java/dotnet/ruby) instrument *inside* the runtime, so
+they work fine under emulation — only golang's eBPF approach needs the native build.
+
+> **Order matters:** the `.NET` arch shim above is set with `kubectl set env`, which a later
+> `kubectl apply -f all-otel.yaml` will wipe (the manifest is intentionally arch-neutral).
+> Always re-run the dotnet `kubectl set env` step *after* any `kubectl apply`.
+
 ### Generate traffic, then check Elastic for all 7 services
 
 ```bash
