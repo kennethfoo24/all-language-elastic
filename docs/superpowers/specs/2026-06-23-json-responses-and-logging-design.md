@@ -1,7 +1,7 @@
 # Design: Standardized JSON Responses + JSON Logging Across the Service Chain
 
 **Date:** 2026-06-23
-**Status:** Approved (design)
+**Status:** Implemented (see commit history on branch `json-responses-and-logging`)
 **Repo:** all-language (polyglot demo: nodejs → python → java → golang → dotnet → ruby → php)
 
 ## Context
@@ -178,3 +178,16 @@ field schema pinned explicitly so output is as identical as the libraries allow.
   the cross-service flamegraph; observe `trace_id` appearing in logs vs. this
   vanilla baseline.
 - Standardize `traceparent` propagation across all hops once OTel is adopted.
+
+## Implementation Notes (deviations from this design)
+
+- **ruby logger:** used the stdlib `Logger` with a JSON formatter instead of the
+  `ougai` gem — still idiomatic, no new dependency, and an exact schema match.
+- **golang:** removed the unused `/` (`sayHello`) and `/internal-work` demo
+  endpoints (Datadog-era span demos, not part of the chain) rather than leaving
+  them. The chain endpoint `/golang` is unchanged in purpose.
+- **log `level` casing:** lowercase everywhere except Java, which emits uppercase
+  `INFO`/`ERROR` via logstash-logback-encoder. Field names and message strings
+  are identical across all services.
+- **php logs:** written to stderr (Apache surfaces it in container logs).
+- **registry:** images are published to `kennethfoo49066/all-language-elastic-<service>`.
