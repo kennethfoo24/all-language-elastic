@@ -16,7 +16,7 @@ spec:
         app: all-language-nodejs
     spec:
       containers:
-      - image: kennethfoo24/all-language-nodejs:latest
+      - image: kennethfoo49066/all-language-elastic-nodejs:latest
         name: all-language-nodejs
         imagePullPolicy: IfNotPresent
         ports:
@@ -24,8 +24,7 @@ spec:
         env:
         - name: PYTHON_SERVICE_URL
           value: "http://all-language-python-lb:5000/python"
-        - name: DD_LOGS_INJECTION
-          value: "true"
+
 ---
 apiVersion: v1
 kind: Service
@@ -62,7 +61,7 @@ spec:
         app: all-language-python
     spec:
       containers:
-      - image: kennethfoo24/all-language-python:latest
+      - image: kennethfoo49066/all-language-elastic-python:latest
         name: all-language-python
         imagePullPolicy: IfNotPresent
         ports:
@@ -104,7 +103,7 @@ spec:
         app: all-language-java
     spec:
       containers:
-      - image: kennethfoo24/all-language-java:latest
+      - image: kennethfoo49066/all-language-elastic-java:latest
         name: all-language-java
         imagePullPolicy: IfNotPresent
         ports:
@@ -146,7 +145,7 @@ spec:
         app: all-language-golang
     spec:
       containers:
-      - image: kennethfoo24/all-language-golang:latest
+      - image: kennethfoo49066/all-language-elastic-golang:latest
         name: all-language-golang
         imagePullPolicy: IfNotPresent
         ports:
@@ -188,11 +187,14 @@ spec:
         app: all-language-ruby
     spec:
       containers:
-      - image: kennethfoo24/all-language-ruby:latest
+      - image: kennethfoo49066/all-language-elastic-ruby:latest
         name: all-language-ruby
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 4567
+        env:
+        - name: PHP_SERVICE_URL
+          value: "http://all-language-php-lb:80/php"
 ---
 apiVersion: v1
 kind: Service
@@ -229,7 +231,7 @@ spec:
         app: all-language-dotnet
     spec:
       containers:
-      - image: kennethfoo24/all-language-dotnet:latest
+      - image: kennethfoo49066/all-language-elastic-dotnet:latest
         name: all-language-dotnet
         imagePullPolicy: IfNotPresent
         ports:
@@ -271,7 +273,7 @@ spec:
     spec:
       containers:
         - name: all-language-php
-          image: kennethfoo24/all-language-php:latest
+          image: kennethfoo49066/all-language-elastic-php:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80

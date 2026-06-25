@@ -10,8 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      DOCKER_REPOSITORY: kennethfoo24   # Docker Hub username/namespace
-      IMAGE_NAME: all-language-php      # Image name in Docker Hub
+      DOCKER_REPOSITORY: kennethfoo49066   # Docker Hub username/namespace
+      IMAGE_NAME: all-language-elastic-php      # Image name in Docker Hub
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +26,5 @@ jobs:
           dockerfile: php/Dockerfile     # Dockerfile path
           tags: ${{ github.sha }}, latest
           # Use Actions context so the values resolve correctly
-          buildArgs: 'DD_GIT_REPOSITORY_URL=github.com/kennethfoo24/all-language-php,DD_GIT_COMMIT_SHA=$(git rev-parse HEAD)'  
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}

@@ -10,8 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      DOCKER_REPOSITORY: kennethfoo24 # name of Docker Hub ID
-      IMAGE_NAME: all-language-nodejs
+      DOCKER_REPOSITORY: kennethfoo49066 # name of Docker Hub ID
+      IMAGE_NAME: all-language-elastic-nodejs
     steps:
     - uses: actions/checkout@v4
     
@@ -27,6 +27,5 @@ jobs:
         registry: docker.io
         dockerfile: nodejs/Dockerfile
         tags: ${{ github.sha }}, latest
-        buildArgs: 'DD_GIT_REPOSITORY_URL=github.com/kennethfoo24/all-language-nodejs,DD_GIT_COMMIT_SHA=$(git rev-parse HEAD)'        
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}

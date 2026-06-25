@@ -1,51 +1,8 @@
 version: '3'
 services:
-  docker-usage:
-    image: nginx
-    volumes:
-       - ./docker-usage/docker-usage.sh:/docker-usage.sh
-    environment:
-      - script_path=${PWD}
-      - user=${USER}
-    command: sh -c "./docker-usage.sh"
-
-  datadog-simple-php:
-    image: "gcr.io/datadoghq/agent:7.41.1"
-    container_name: datadog-simple-php
-    env_file:
-      - ~/sandbox.docker.env
-    ports:
-      - 8126:8126/tcp
-    environment:
-      - DD_APM_ENABLED=true
-      - DD_APM_NON_LOCAL_TRAFFIC=true
-      - DD_LOGS_ENABLED=true
-      - DD_LOG_LEVEL=INFO
-      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
-      # - DD_CONTAINER_EXCLUDE="name:datadog-simple-php"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /proc/:/host/proc/:ro
-      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
-
   simple-php:
-    build: 
+    build:
       context: .
-      args:
-        VERSION: 0.82.0
-        ARCH: arm64
     ports:
       - '8080:80'
     container_name: simple-php
-    environment:
-      - DD_AGENT_HOST=datadog-simple-php
-      - DD_TRACE_DEBUG=false
-      - DD_TRACE_AGENT_PORT=8126
-      - DD_SERVICE=php_app
-      - DD_ENV=php
-    depends_on:
-      - datadog-simple-php
-    labels:
-      com.datadoghq.tags.service: 'php_app'
-      com.datadoghq.tags.version: '1.0.0'
-      com.datadoghq.tags.env: 'php'  

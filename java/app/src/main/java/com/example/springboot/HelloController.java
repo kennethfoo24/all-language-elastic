@@ -1,108 +1,74 @@
 package com.example.springboot;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
-// import thread to sleed when creating new spans
-import java.lang.Thread;
-// import the LocalDate class to add the date as a tag
-import java.time.LocalDate; 
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-// // Datadog tracer
-// import io.opentracing.util.GlobalTracer;
-// import io.opentracing.Span;
-// import io.opentracing.Scope;
-// import io.opentracing.tag.Tags;
-// import io.opentracing.log.Fields;
-// import io.opentracing.Tracer;
-// import java.util.Collections;
-// import datadog.trace.api.Trace;
-// import datadog.trace.api.DDTags;
+import static net.logstash.logback.argument.StructuredArguments.kv;
 
-// Making a class based on RestController
 @RestController
 public class HelloController {
 
-	// Read from env GOLANG_SERVICE_URL (e.g. http://all-language-golang-lb:80)
-    	@Value("${GOLANG_SERVICE_URL}")
-    	private String golangServiceUrl;
+    private static final Logger log = LoggerFactory.getLogger("java");
+    private static final String UPSTREAM = "golang";
 
-    	private final RestTemplate restTemplate = new RestTemplate();
-	
-	@GetMapping("/java")
-	public ResponseEntity<String> callService() {
-		String url = golangServiceUrl + "/golang";
-		// forward the GET and return whatever the Go service returns
-        	ResponseEntity<String> resp = restTemplate.getForEntity(url, String.class);
-        	return ResponseEntity
-                	.status(resp.getStatusCode())
-                	.body(resp.getBody());
-		}
-	
+    @Value("${GOLANG_SERVICE_URL}")
+    private String golangServiceUrl;
 
-	// // Setting an error to the current span when a given exception happens
-	// @GetMapping(value="/java-set-error")
-	// public String setError() {
-	// 	// Getting the span
-	// 	final Span span = GlobalTracer.get().activeSpan();
-	// 	if (span != null) {
-	// 		// creating an error by accessing non existing element in list
-	// 		try{
-	// 			int[] smallArray = {1};
-	// 			System.out.println(smallArray[1]);
-	// 		} catch (Exception ex){
-	// 			// Since the error is catched, the http status code will be 200 and the span will have status Ok
-	// 			// So we use the following line to force the error on the span here.
-	// 			span.setTag(Tags.ERROR, true);
-	// 			span.log(Collections.singletonMap(Fields.ERROR_OBJECT, ex));
-	// 		}
-	// 	}
-	// 	return "Setting an error.";
-	// }
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper mapper = new ObjectMapper();
 
-	// // Following we use a function that we will annotate to trace it when it's called.
-	// // This is a waiting function.
-	// @Trace(operationName = "manual.span", resourceName = "Waiting")
-	// public void Waiting() {
-	// 	try{
-	// 		Thread.sleep(1000);
-	// 	} catch (Exception e){
-	// 		return;
-	// 	}
-	// }
+    @GetMapping("/java")
+    public ResponseEntity<Map<String, Object>> callService(HttpServletRequest request) {
+        long start = System.currentTimeMillis();
+        log.info("request received", kv("method", request.getMethod()), kv("path", request.getRequestURI()));
 
-	// // We call the previous function and therefore create a span with trace annotation.
-	// @GetMapping(value="/trace-annotation")
-	// public String traceAnnotation() {
-	// 	Waiting();
-	// 	return "Creating a span with trace annotations";
-	// }
+        String url = golangServiceUrl + "/golang";
+        try {
+            log.info("calling upstream", kv("upstream", UPSTREAM));
+            ResponseEntity<String> resp = restTemplate.getForEntity(url, String.class);
+            log.info("upstream responded", kv("upstream", UPSTREAM), kv("status_code", resp.getStatusCode().value()));
 
-	// // Manually creating a new span
-	// @GetMapping(value="/manual-span")
-	// public String manualSpan() {
-	// 	Tracer tracer = GlobalTracer.get();
-	// 	// Setting the spans service, resource and operation name
-	// 	Span span = tracer.buildSpan("manual.span")
- //            .withTag(DDTags.SERVICE_NAME, "java-manual")
- //            .withTag(DDTags.RESOURCE_NAME, "Manual")
- //            .start();
+            JsonNode upstream = mapper.readTree(resp.getBody());
 
-	// 		try (Scope scope = tracer.activateSpan(span)) {
-	// 			// Alternatively, set tags after creation
-	// 			span.setTag("state", "crafted");
-	
-	// 			try{
-	// 				Thread.sleep(1000);
-	// 			} catch (Exception e){}
-	
-	// 		}
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("service", "java");
+            body.put("message", "Hello from java");
+            body.put("status", "ok");
+            body.put("timestamp", Instant.now().toString());
+            body.put("upstream", upstream);
 
-	// 		span.finish();
+            log.info("request completed",
+                    kv("method", request.getMethod()), kv("path", request.getRequestURI()),
+                    kv("status_code", 200), kv("duration_ms", System.currentTimeMillis() - start));
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            log.error("upstream call failed", kv("upstream", UPSTREAM), kv("error", e.getMessage()));
 
-	// 	return "Manually creating a span";
-	// }
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("service", "java");
+            body.put("message", "Hello from java");
+            body.put("status", "error");
+            body.put("timestamp", Instant.now().toString());
+            body.put("upstream", null);
+            body.put("error", e.getMessage());
+
+            log.info("request completed",
+                    kv("method", request.getMethod()), kv("path", request.getRequestURI()),
+                    kv("status_code", 502), kv("duration_ms", System.currentTimeMillis() - start));
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(body);
+        }
+    }
 }

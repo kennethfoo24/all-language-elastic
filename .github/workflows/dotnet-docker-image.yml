@@ -10,8 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      DOCKER_REPOSITORY: kennethfoo24    # your Docker Hub username
-      IMAGE_NAME: all-language-dotnet    # the .NET image name
+      DOCKER_REPOSITORY: kennethfoo49066    # your Docker Hub username
+      IMAGE_NAME: all-language-elastic-dotnet    # the .NET image name
 
     steps:
       - name: Checkout repository
@@ -38,6 +38,5 @@ jobs:
           registry: docker.io
           dockerfile: dotnet/Dockerfile           # adjust if your Dockerfile lives elsewhere
           tags: ${{ github.sha }},latest
-          buildArgs: 'DD_GIT_REPOSITORY_URL=github.com/kennethfoo24/all-language-dotnet,DD_GIT_COMMIT_SHA=$(git rev-parse HEAD)'
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}

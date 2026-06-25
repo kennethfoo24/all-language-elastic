@@ -1,54 +1,36 @@
-﻿// Adding System to add the date as tag in a span
-using System;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-
+using System.Diagnostics;
+using System.Text.Json;
 using Serilog;
 using Serilog.Context;
-using Serilog.Formatting.Json;
+using Serilog.Templates;
 
-// Initialize a new instance of the WebApplication builder
+// Standardized JSON logging: timestamp, level, service, message + structured fields.
+// ExpressionTemplate gives full control over the emitted field names/shape.
+Log.Logger = new LoggerConfiguration()
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("service", "dotnet")
+    .MinimumLevel.Information()
+    .WriteTo.Console(new ExpressionTemplate(
+        "{ {timestamp: @t, level: ToLower(@l), service: service, message: @m, method: method, path: path, status_code: status_code, duration_ms: duration_ms, upstream: upstream, error: error} }\n"))
+    .CreateLogger();
+
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog();
 var app = builder.Build();
 
-// Regardless of the output layout, your LoggerConfiguration must be
-// enriched from the LogContext to extract the Datadog
-// properties that are automatically injected by the .NET tracer
-//
-// Additions to LoggerConfiguration:
-// - .Enrich.FromLogContext()
-var loggerConfiguration = new LoggerConfiguration()
-                              .Enrich.FromLogContext()
-                              .MinimumLevel.Is(Serilog.Events.LogEventLevel.Information);
+const string upstreamName = "ruby";
 
-// configure serilog to output to console so the datadog docker agent can pick it up
-
-// raw version
-// loggerConfiguration = loggerConfiguration
-//                           .WriteTo.Console(
-//                               outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Properties} {Message:lj} {NewLine}{Exception}");
-
-// json version
-loggerConfiguration = loggerConfiguration
-                          .WriteTo.Console(
-                              new JsonFormatter());
-
-// Main procedure
-var log = loggerConfiguration.CreateLogger();
-
-// Respond "Hello world!" on /
-app.MapGet("/", () => "Hello World!");
-
-// 1) /dotnet: greeting + upstream service call
 app.MapGet("/dotnet", async (HttpContext context) =>
 {
+    var start = Stopwatch.GetTimestamp();
+    var method = context.Request.Method;
+    var path = context.Request.Path.ToString();
+    Log.ForContext("method", method).ForContext("path", path).Information("request received");
+
     var serviceUrl = Environment.GetEnvironmentVariable("RUBY_SERVICE_URL");
     if (string.IsNullOrEmpty(serviceUrl))
     {
-        context.Response.StatusCode = 500;
-        await context.Response.WriteAsync("RUBY_SERVICE_URL is not set");
+        await WriteError(context, method, path, start, "RUBY_SERVICE_URL is not set");
         return;
     }
 
@@ -56,23 +38,66 @@ app.MapGet("/dotnet", async (HttpContext context) =>
     HttpResponseMessage upstream;
     try
     {
+        Log.ForContext("upstream", upstreamName).Information("calling upstream");
         upstream = await client.GetAsync(serviceUrl);
     }
     catch (Exception ex)
     {
-        context.Response.StatusCode = 502;
-        await context.Response.WriteAsync($"Failed to call upstream service: {ex.Message}");
+        await WriteError(context, method, path, start, ex.Message);
+        return;
+    }
+
+    if (!upstream.IsSuccessStatusCode)
+    {
+        await WriteError(context, method, path, start, $"upstream returned status {(int)upstream.StatusCode}");
         return;
     }
 
     var upstreamBody = await upstream.Content.ReadAsStringAsync();
+    Log.ForContext("upstream", upstreamName)
+       .ForContext("status_code", (int)upstream.StatusCode)
+       .Information("upstream responded");
 
-    context.Response.StatusCode = (int)upstream.StatusCode;
-    context.Response.ContentType = "text/plain";
+    var envelope = new Dictionary<string, object?>
+    {
+        ["service"] = "dotnet",
+        ["message"] = "Hello from dotnet",
+        ["status"] = "ok",
+        ["timestamp"] = DateTime.UtcNow.ToString("o"),
+        ["upstream"] = JsonSerializer.Deserialize<JsonElement>(upstreamBody),
+    };
 
-    await context.Response.WriteAsync("Hello World from .NET!\n");
-    await context.Response.WriteAsync(upstreamBody);
+    context.Response.ContentType = "application/json";
+    await context.Response.WriteAsync(JsonSerializer.Serialize(envelope));
+
+    Log.ForContext("method", method).ForContext("path", path)
+       .ForContext("status_code", 200)
+       .ForContext("duration_ms", (long)Stopwatch.GetElapsedTime(start).TotalMilliseconds)
+       .Information("request completed");
 });
 
-
 app.Run();
+
+static async Task WriteError(HttpContext context, string method, string path, long start, string error)
+{
+    Log.ForContext("upstream", "ruby").ForContext("error", error).Error("upstream call failed");
+
+    var envelope = new Dictionary<string, object?>
+    {
+        ["service"] = "dotnet",
+        ["message"] = "Hello from dotnet",
+        ["status"] = "error",
+        ["timestamp"] = DateTime.UtcNow.ToString("o"),
+        ["upstream"] = null,
+        ["error"] = error,
+    };
+
+    context.Response.StatusCode = 502;
+    context.Response.ContentType = "application/json";
+    await context.Response.WriteAsync(JsonSerializer.Serialize(envelope));
+
+    Log.ForContext("method", method).ForContext("path", path)
+       .ForContext("status_code", 502)
+       .ForContext("duration_ms", (long)Stopwatch.GetElapsedTime(start).TotalMilliseconds)
+       .Information("request completed");
+}

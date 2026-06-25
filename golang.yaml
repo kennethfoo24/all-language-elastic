@@ -16,7 +16,7 @@ spec:
         app: all-language-golang
     spec:
       containers:
-      - image: kennethfoo24/all-language-golang:latest
+      - image: kennethfoo49066/all-language-elastic-golang:latest
         name: all-language-golang
         imagePullPolicy: IfNotPresent
         ports:
