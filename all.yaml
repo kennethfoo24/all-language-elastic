@@ -194,7 +194,7 @@ spec:
         - containerPort: 4567
         env:
         - name: PHP_SERVICE_URL
-          value: "http://all-language-php-lb:80/php"
+          value: "http://all-language-php-lb:80/php/"
 ---
 apiVersion: v1
 kind: Service

@@ -1,5 +1,8 @@
 # start by pulling the python image
-FROM python:3.8-slim
+# NOTE: 3.9+ is required — the EDOT/OpenTelemetry Python auto-instrumentation
+# injects bundled deps (requests/urllib3) that use 3.9-only syntax
+# (functools.cache, runtime tuple[...] subscripting). 3.8 crashes on import.
+FROM python:3.12-slim
 
 EXPOSE 5000
 

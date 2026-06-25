@@ -8,7 +8,12 @@ require 'time'
 
 set :logging, false # replace Sinatra's plain-text access log with our JSON logger
 
-PHP_URL = URI(ENV.fetch('PHP_SERVICE_URL', 'http://all-language-php-lb:80/php'))
+# Sinatra 4.1+ enables Rack::Protection::HostAuthorization, which 403s any request
+# whose Host header isn't localhost. In-cluster callers reach us via the Service
+# DNS name (all-language-ruby-lb), so permit all hosts. Empty list = no restriction.
+set :host_authorization, permitted_hosts: []
+
+PHP_URL = URI(ENV.fetch('PHP_SERVICE_URL', 'http://all-language-php-lb:80/php/'))
 UPSTREAM = 'php'
 
 # Standardized JSON logger: timestamp, level, service, message + extra fields.

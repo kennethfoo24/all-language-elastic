@@ -1,0 +1,415 @@
+# =============================================================================
+# all-otel.yaml
+# -----------------------------------------------------------------------------
+# Same topology as all.yaml, but each Deployment is annotated for Elastic
+# Distribution of OpenTelemetry (EDOT) zero-code auto-instrumentation via the
+# OpenTelemetry Operator.
+#
+# PREREQUISITES (cluster-wide, NOT created by this file):
+#   1. OpenTelemetry Operator installed (ships with EDOT in the Elastic
+#      "opentelemetry-kube-stack" Helm chart).
+#   2. An Instrumentation CR named `elastic-instrumentation` in namespace
+#      `opentelemetry-operator-system`. The annotations below reference it as
+#      "opentelemetry-operator-system/elastic-instrumentation".
+#   3. An EDOT Collector reachable at the OTLP endpoint used by the manually
+#      instrumented services (Ruby / PHP) below.
+#
+# The operator mutates a Pod at admission time only when the inject annotation
+# is present on the POD TEMPLATE (spec.template.metadata.annotations), which is
+# where every annotation below lives.
+#
+# EDOT auto-instrumentation support per language:
+#   nodejs  -> inject-nodejs   ✅ supported
+#   python  -> inject-python   ✅ supported
+#   java    -> inject-java     ✅ supported
+#   dotnet  -> inject-dotnet   ✅ supported
+#   golang  -> inject-go       ✅ supported (eBPF — needs elevated privileges)
+#   ruby    -> ❌ NOT supported by EDOT/operator  -> manual OTel Ruby SDK
+#   php     -> ❌ NOT supported by operator inject -> manual EDOT PHP SDK
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# NodeJS — EDOT Node.js auto-instrumentation (public entry point)
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: all-language-nodejs
+  name: all-language-nodejs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: all-language-nodejs
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: all-language-nodejs
+      annotations:
+        instrumentation.opentelemetry.io/inject-nodejs: "opentelemetry-operator-system/elastic-instrumentation"
+    spec:
+      containers:
+      - image: kennethfoo49066/all-language-elastic-nodejs:latest
+        name: all-language-nodejs
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        env:
+        - name: PYTHON_SERVICE_URL
+          value: "http://all-language-python-lb:5000/python"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: all-language-nodejs
+  name: all-language-nodejs-lb
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 3000
+  selector:
+    app: all-language-nodejs
+  type: LoadBalancer
+status:
+  loadBalancer: {}
+---
+# -----------------------------------------------------------------------------
+# Python — EDOT Python auto-instrumentation
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: all-language-python
+  name: all-language-python
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: all-language-python
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: all-language-python
+      annotations:
+        instrumentation.opentelemetry.io/inject-python: "opentelemetry-operator-system/elastic-instrumentation"
+    spec:
+      containers:
+      - image: kennethfoo49066/all-language-elastic-python:latest
+        name: all-language-python
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+        env:
+        - name: JAVA_SERVICE_URL
+          value: "http://all-language-java-lb:8080"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: all-language-python
+  name: all-language-python-lb
+spec:
+  ports:
+  - port: 5000
+    protocol: TCP
+    targetPort: 5000
+  selector:
+    app: all-language-python
+  type: ClusterIP
+---
+# -----------------------------------------------------------------------------
+# Java — EDOT Java auto-instrumentation
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: all-language-java
+  name: all-language-java
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: all-language-java
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: all-language-java
+      annotations:
+        instrumentation.opentelemetry.io/inject-java: "opentelemetry-operator-system/elastic-instrumentation"
+    spec:
+      containers:
+      - image: kennethfoo49066/all-language-elastic-java:latest
+        name: all-language-java
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: GOLANG_SERVICE_URL
+          value: "http://all-language-golang-lb:8000"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: all-language-java
+  name: all-language-java-lb
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: all-language-java
+  type: ClusterIP
+---
+# -----------------------------------------------------------------------------
+# Golang — EDOT Go auto-instrumentation (eBPF based)
+# -----------------------------------------------------------------------------
+# NOTE: Go eBPF also needs the target binary path (OTEL_GO_AUTO_TARGET_EXE /
+# the otel-go-auto-target-exe annotation, e.g. /app/hello-world) before traces
+# appear. Omitted for now — add it here or in the elastic-instrumentation CR
+# (spec.go.env) when Go tracing is required.
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: all-language-golang
+  name: all-language-golang
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: all-language-golang
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: all-language-golang
+      annotations:
+        instrumentation.opentelemetry.io/inject-go: "opentelemetry-operator-system/elastic-instrumentation"
+    spec:
+      containers:
+      - image: kennethfoo49066/all-language-elastic-golang:latest
+        name: all-language-golang
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DOTNET_SERVICE_URL
+          value: "http://all-language-dotnet-lb:5555"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: all-language-golang
+  name: all-language-golang-lb
+spec:
+  ports:
+  - port: 8000
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    app: all-language-golang
+  type: ClusterIP
+---
+# -----------------------------------------------------------------------------
+# Ruby — NOT supported by EDOT / OpenTelemetry Operator auto-instrumentation.
+# -----------------------------------------------------------------------------
+# There is no `inject-ruby` annotation. Instrument MANUALLY in the application:
+#
+#   1. Add gems to the Ruby service Gemfile:
+#        gem "opentelemetry-sdk"
+#        gem "opentelemetry-exporter-otlp"
+#        gem "opentelemetry-instrumentation-all"
+#   2. Initialize in app.rb (top of file, before the app boots):
+#        require "opentelemetry/sdk"
+#        require "opentelemetry/exporter/otlp"
+#        require "opentelemetry/instrumentation/all"
+#        OpenTelemetry::SDK.configure { |c| c.use_all }
+#   3. The SDK reads the OTEL_* env vars below to find the collector and
+#      name the service (no code-level endpoint config needed).
+#
+# OTLP traffic is sent to the EDOT Collector. Adjust the endpoint to match your
+# install (here: a collector Service named `opentelemetry-collector` on 4318).
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: all-language-ruby
+  name: all-language-ruby
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: all-language-ruby
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: all-language-ruby
+    spec:
+      containers:
+      - image: kennethfoo49066/all-language-elastic-ruby:latest
+        name: all-language-ruby
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 4567
+        env:
+        - name: PHP_SERVICE_URL
+          # Trailing slash is required: Apache 301-redirects /php -> /php/ and the
+          # Ruby client does not follow it, so it would JSON-parse the redirect HTML.
+          value: "http://all-language-php-lb:80/php/"
+        # --- Manual OTel SDK configuration (consumed by the gems above) ---
+        - name: OTEL_SERVICE_NAME
+          value: "all-language-ruby"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://opentelemetry-collector.opentelemetry-operator-system:4318"
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: "http/protobuf"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=all-language-ruby,deployment.environment=demo"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: all-language-ruby
+  name: all-language-ruby-lb
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 4567
+  selector:
+    app: all-language-ruby
+  type: ClusterIP
+status:
+  loadBalancer: {}
+---
+# -----------------------------------------------------------------------------
+# .NET — EDOT .NET auto-instrumentation
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: all-language-dotnet
+  name: all-language-dotnet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: all-language-dotnet
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: all-language-dotnet
+      annotations:
+        instrumentation.opentelemetry.io/inject-dotnet: "opentelemetry-operator-system/elastic-instrumentation"
+    spec:
+      containers:
+      - image: kennethfoo49066/all-language-elastic-dotnet:latest
+        name: all-language-dotnet
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5555
+        env:
+        - name: RUBY_SERVICE_URL
+          value: "http://all-language-ruby-lb:80/ruby"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: all-language-dotnet
+  name: all-language-dotnet-lb
+spec:
+  ports:
+  - port: 5555
+    protocol: TCP
+    targetPort: 5555
+  selector:
+    app: all-language-dotnet
+  type: ClusterIP
+---
+# -----------------------------------------------------------------------------
+# PHP — NOT supported by OpenTelemetry Operator auto-injection.
+# -----------------------------------------------------------------------------
+# There is no `inject-php` operator annotation. EDOT PHP exists as an SDK but
+# must be added to the image / instrumented MANUALLY:
+#
+#   1. Install the OpenTelemetry PHP extension in the Dockerfile:
+#        pecl install opentelemetry
+#        docker-php-ext-enable opentelemetry
+#   2. Add Composer packages (EDOT PHP distro):
+#        composer require elastic/otel-php          # or open-telemetry/sdk
+#        composer require open-telemetry/exporter-otlp
+#   3. Enable auto-instrumentation via php.ini / env:
+#        otel.enabled=1  (extension)  +  OTEL_PHP_AUTOLOAD_ENABLED=true
+#   4. The SDK reads the OTEL_* env vars below to export to the collector.
+#
+# Endpoint points to the same EDOT Collector as the Ruby service above.
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: all-language-php
+  name: all-language-php
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: all-language-php
+  template:
+    metadata:
+      labels:
+        app: all-language-php
+    spec:
+      containers:
+        - name: all-language-php
+          image: kennethfoo49066/all-language-elastic-php:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          env:
+            # --- Manual EDOT PHP SDK configuration ---
+            - name: OTEL_PHP_AUTOLOAD_ENABLED
+              value: "true"
+            - name: OTEL_SERVICE_NAME
+              value: "all-language-php"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://opentelemetry-collector.opentelemetry-operator-system:4318"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=all-language-php,deployment.environment=demo"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: all-language-php
+  name: all-language-php-lb
+spec:
+  type: ClusterIP
+  selector:
+    app: all-language-php
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
