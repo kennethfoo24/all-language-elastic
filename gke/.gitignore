@@ -1,0 +1,11 @@
+# Terraform state, caches, and local config — never commit these.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Your real variable values (project_id etc.). Keep .example committed.
+terraform.tfvars
+*.auto.tfvars
