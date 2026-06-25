@@ -175,10 +175,11 @@ spec:
 # -----------------------------------------------------------------------------
 # Golang — EDOT Go auto-instrumentation (eBPF based)
 # -----------------------------------------------------------------------------
-# NOTE: Go eBPF also needs the target binary path (OTEL_GO_AUTO_TARGET_EXE /
-# the otel-go-auto-target-exe annotation, e.g. /app/hello-world) before traces
-# appear. Omitted for now — add it here or in the elastic-instrumentation CR
-# (spec.go.env) when Go tracing is required.
+# NOTE: Go eBPF needs the target binary path before it can attach. It is supplied
+# via the otel-go-auto-target-exe annotation below (OTEL_GO_AUTO_TARGET_EXE).
+# The Go Dockerfile builds the binary to /app/hello-world (see golang/Dockerfile).
+# The eBPF agent also requires elevated privileges; the elastic-instrumentation CR
+# (spec.go) sets the necessary securityContext on the injected sidecar.
 # -----------------------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
@@ -198,6 +199,8 @@ spec:
         app: all-language-golang
       annotations:
         instrumentation.opentelemetry.io/inject-go: "opentelemetry-operator-system/elastic-instrumentation"
+        # eBPF needs the absolute path of the target binary inside the container.
+        instrumentation.opentelemetry.io/otel-go-auto-target-exe: "/app/hello-world"
     spec:
       containers:
       - image: kennethfoo49066/all-language-elastic-golang:latest

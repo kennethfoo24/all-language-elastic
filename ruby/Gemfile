@@ -6,3 +6,9 @@ gem 'json'
 gem "puma"
 gem "rackup"
 
+# OpenTelemetry — EDOT/OTel operator has no inject-ruby, so instrument manually.
+# Configured via OTEL_* env vars in all-otel.yaml; use_all wires up Sinatra + Net::HTTP.
+gem "opentelemetry-sdk"
+gem "opentelemetry-exporter-otlp"
+gem "opentelemetry-instrumentation-all"
+

@@ -45,7 +45,7 @@ kubectl delete -f all.yaml
 kind delete cluster --name all-language
 ```
 
-> **Apple Silicon (M-series):** the prebuilt images are `linux/amd64` and run under emulation. If a pod shows `exec format error`, enable Docker Desktop → Settings → General → **"Use Rosetta for x86/amd64 emulation"**.
+> **Apple Silicon (M-series):** the prebuilt Docker Hub images used by `all.yaml` are `linux/amd64` and run under emulation — if a pod shows `exec format error`, enable Docker Desktop → Settings → General → **"Use Rosetta for x86/amd64 emulation"**. If you build the images yourself (e.g. for the EDOT tracing workflow), build them natively for your node's architecture with `docker buildx build --platform linux/arm64 …` so auto-instrumentation loads the matching native libraries (see the OpenTelemetry section below).
 
 ---
 
@@ -147,4 +147,66 @@ Every service logs JSON on the same schema:
 
 ```bash
 kubectl logs deploy/all-language-nodejs | jq
+```
+
+## OpenTelemetry tracing (EDOT)
+
+`all-otel.yaml` is the same topology wired for the Elastic Distribution of OpenTelemetry
+(EDOT). It assumes the OpenTelemetry Operator + an `elastic-instrumentation` CR are
+already installed (see the header of that file). How each service is instrumented:
+
+| Service | Method |
+|---------|--------|
+| nodejs / python / java / dotnet | Operator auto-injection (`inject-*` annotation) |
+| golang  | Operator eBPF injection (`inject-go` + `otel-go-auto-target-exe`) |
+| ruby    | Manual OTel Ruby SDK in the app (no operator support) |
+| php     | EDOT PHP package baked into the image (no operator support) |
+
+### Deploy
+
+```bash
+kubectl apply -f all-otel.yaml
+```
+
+`ruby` and `php` carry their instrumentation **inside the image**, so if you change
+them you must rebuild. On **kind**, load the image into the node (the prebuilt
+Docker Hub `:latest` is `IfNotPresent`, so a plain restart won't pick up a new build):
+
+```bash
+# Build for the node's architecture (arm64 on Apple Silicon, amd64 on a cloud cluster)
+docker build -f ruby/Dockerfile -t kennethfoo49066/all-language-elastic-ruby:latest .
+docker build               -t kennethfoo49066/all-language-elastic-php:latest  php/
+
+# kind: load images into the cluster, then restart
+kind load docker-image kennethfoo49066/all-language-elastic-ruby:latest --name kind
+kind load docker-image kennethfoo49066/all-language-elastic-php:latest  --name kind
+kubectl rollout restart deploy/all-language-golang deploy/all-language-ruby deploy/all-language-php
+
+# Standard cluster (e.g. GKE): push to Docker Hub instead of `kind load`, then restart
+#   docker push kennethfoo49066/all-language-elastic-ruby:latest
+#   docker push kennethfoo49066/all-language-elastic-php:latest
+```
+
+### .NET on arm64 (e.g. kind on Apple Silicon)
+
+The OpenTelemetry Operator only knows the `linux-x64` / `linux-musl-x64` .NET profiler
+paths — it has no arm64 case and injects the x64 path even on arm64 nodes, so the CLR
+profiler fails to load and no .NET traces appear. EDOT's image *does* ship the arm64
+native profiler, so the fix is to point `CORECLR_PROFILER_PATH` at it. The operator only
+sets that env var "if not already present," so an explicit value always wins. Pick the
+path from the node arch — safe to run on either cluster (on x86 it resolves to
+`linux-x64`, the same value the operator would have used):
+
+```bash
+ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}')
+[ "$ARCH" = "arm64" ] && RID=linux-arm64 || RID=linux-x64
+kubectl set env deploy/all-language-dotnet \
+  CORECLR_PROFILER_PATH=/otel-auto-instrumentation-dotnet/$RID/OpenTelemetry.AutoInstrumentation.Native.so
+```
+
+### Generate traffic, then check Elastic for all 7 services
+
+```bash
+kubectl port-forward svc/all-language-nodejs-lb 8080:80 &
+curl -s http://localhost:8080/nodejs | jq .service
 ```

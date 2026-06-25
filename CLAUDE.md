@@ -10,7 +10,7 @@ It demonstrates two things end-to-end across languages:
 - **Nested JSON responses** — each service wraps the downstream service's JSON, so one call returns the whole chain as a single nested object.
 - **Standardized structured JSON logging** — every service logs JSON on a shared schema.
 
-The app is instrumentation-neutral (no vendor tracing). It is intentionally kept OpenTelemetry-ready so distributed tracing can be added later; see `docs/superpowers/specs/2026-06-23-json-responses-and-logging-design.md`.
+The base manifest (`all.yaml`) is instrumentation-neutral. Distributed tracing is added via a separate manifest (`all-otel.yaml`) using the Elastic Distribution of OpenTelemetry (EDOT) — see "OpenTelemetry / EDOT Instrumentation" below. The original design doc is `docs/superpowers/specs/2026-06-23-json-responses-and-logging-design.md`.
 
 ## Architecture
 
@@ -62,6 +62,26 @@ curl http://<LOAD_BALANCER_IP>/nodejs | jq
 ```
 
 `golang.yaml` is a standalone manifest for the Golang service with its own LoadBalancer (isolated testing).
+
+## OpenTelemetry / EDOT Instrumentation
+
+`all-otel.yaml` mirrors `all.yaml` but wires every service for Elastic Distribution of OpenTelemetry (EDOT) tracing. Prereqs (not created by the file): the OpenTelemetry Operator and an `elastic-instrumentation` CR in `opentelemetry-operator-system`. Instrumentation differs by language:
+
+| Service | Method | Where it lives |
+|---------|--------|----------------|
+| nodejs / python / java / dotnet | Operator auto-injection | `inject-<lang>` pod-template annotation |
+| golang | Operator eBPF injection | `inject-go` + `otel-go-auto-target-exe: /app/hello-world` annotations |
+| ruby | Manual OTel Ruby SDK (operator has no `inject-ruby`) | `opentelemetry-sdk`/`-exporter-otlp`/`-instrumentation-all` gems + `OpenTelemetry::SDK.configure(&:use_all)` in `ruby/app.rb` |
+| php | EDOT PHP package (operator has no `inject-php`) | `elastic-otel-php` `.deb` installed in `php/Dockerfile` (bundles extension + SDK; no composer/pecl) |
+
+Ruby/PHP read OTLP config from `OTEL_*` env vars set in `all-otel.yaml`. The operator-injected services need nothing in the image.
+
+**Gotchas baked into the manifest/Dockerfiles:**
+- **dotnet on arm64**: the operator only emits `linux-x64`/`linux-musl-x64` profiler paths (no arm64 case; it rejects other `otel-dotnet-auto-runtime` values). On arm64 nodes the injected x64 profiler fails to load → no traces. Fix is a deploy-time override: `kubectl set env deploy/all-language-dotnet CORECLR_PROFILER_PATH=/otel-auto-instrumentation-dotnet/<rid>/OpenTelemetry.AutoInstrumentation.Native.so` (rid = `linux-arm64` on arm64, else `linux-x64`). The operator only sets that env "if not already present," so the explicit value wins. The manifest is intentionally left arch-neutral; the override is in the README rollout steps.
+- **php image is multi-arch**: `php/Dockerfile` selects the EDOT `.deb` via Docker's `TARGETARCH` build arg, so build with `docker buildx --platform linux/<arch>` (or a native `docker build`) matching the target node.
+- **ruby/php instrumentation is in the image** → changes require a rebuild; on kind, `kind load docker-image` (plain `:latest` is `IfNotPresent`, so a restart alone won't refresh it).
+
+See the README "OpenTelemetry tracing (EDOT)" section for the full deploy/rollout commands.
 
 ## Building Docker Images
 

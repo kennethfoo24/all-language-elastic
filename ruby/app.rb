@@ -6,6 +6,15 @@ require 'json'
 require 'logger'
 require 'time'
 
+# --- OpenTelemetry (manual SDK; the EDOT operator has no inject-ruby annotation) ---
+# Reads OTEL_SERVICE_NAME / OTEL_EXPORTER_OTLP_ENDPOINT / OTEL_EXPORTER_OTLP_PROTOCOL
+# from the environment (set in all-otel.yaml). use_all instruments Sinatra + Net::HTTP,
+# so both the inbound request and the outbound call to php are traced.
+require 'opentelemetry/sdk'
+require 'opentelemetry/exporter/otlp'
+require 'opentelemetry/instrumentation/all'
+OpenTelemetry::SDK.configure(&:use_all)
+
 set :logging, false # replace Sinatra's plain-text access log with our JSON logger
 
 # Sinatra 4.1+ enables Rack::Protection::HostAuthorization, which 403s any request
