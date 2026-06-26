@@ -1,0 +1,25 @@
+project_id = "your-gcp-project-id"
+
+# Defaults (uncomment to override — see variables.tf):
+# region          = "asia-southeast1"
+# zone            = "asia-southeast1-a"
+# cluster_name    = "kenneth-gke"
+# machine_type    = "e2-standard-4"
+# node_count      = 3
+# disk_size_gb    = 100
+# release_channel = "REGULAR"
+
+# Your deployer IP is added to master_authorized_networks automatically.
+# Add extra CIDRs here if you need kubectl access from other machines/VPNs:
+# additional_master_authorized_cidrs = ["203.0.113.0/24"]
+
+# ---------------------------------------------------------------------------
+# Elastic org-policy labels (required — nodes won't start without these).
+# division/team/org must match the org allowlist; keep-until and project are
+# free-form. Adjust values to match your team's approved strings.
+# ---------------------------------------------------------------------------
+label_division   = "field"
+label_team       = "sa"
+label_org        = "elastic-sa"
+label_keep_until = "2026-12-31"
+label_project    = "all-language-demo"

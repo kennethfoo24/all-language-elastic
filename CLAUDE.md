@@ -61,7 +61,19 @@ kubectl get svc all-language-nodejs-lb    # find the LoadBalancer address
 curl http://<LOAD_BALANCER_IP>/nodejs | jq
 ```
 
-`golang.yaml` is a standalone manifest for the Golang service with its own LoadBalancer (isolated testing).
+## GKE Terraform Module (`gke/`)
+
+
+`gke/` provisions a zonal GKE Standard cluster (dedicated VPC + subnet + node pool) via Terraform. `cluster.sh` wraps `terraform` + `gcloud` for one-command up/down. Defaults to `asia-southeast1-a`, `e2-standard-4` × 3. Nodes are amd64, so arm64 EDOT workarounds (dotnet profiler path, golang native build) are not needed on GKE.
+
+Requires Elastic org-policy labels set in `terraform.tfvars` (gitignored — copy from `terraform.tfvars.example`):
+
+```bash
+cd gke
+cp terraform.tfvars.example terraform.tfvars   # edit project_id + labels
+./cluster.sh up      # init + apply + wire kubectl
+./cluster.sh down    # destroy everything
+```
 
 ## OpenTelemetry / EDOT Instrumentation
 

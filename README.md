@@ -49,12 +49,21 @@ kind delete cluster --name all-language
 
 ---
 
-## Option B — Standard Kubernetes (e.g. GKE)
+## Option B — GKE (Terraform)
 
-Point `kubectl` at your cluster, then deploy. For GKE:
+The `gke/` directory contains a Terraform module that provisions a zonal GKE Standard cluster (VPC + subnet + node pool). See [gke/README.md](gke/README.md) for full setup steps.
+
+```bash
+cd gke
+cp terraform.tfvars.example terraform.tfvars
+# edit terraform.tfvars — set project_id and org-policy labels
+./cluster.sh up       # provisions cluster and wires kubectl
+```
+
+Or point `kubectl` at any existing GKE cluster manually:
 ```bash
 gcloud container clusters get-credentials <CLUSTER_NAME> \
-  --region <REGION> --project <PROJECT_ID>
+  --zone <ZONE> --project <PROJECT_ID>
 ```
 
 **Deploy:**

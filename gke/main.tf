@@ -66,6 +66,20 @@ resource "google_container_cluster" "primary" {
   remove_default_node_pool = true
   initial_node_count       = 1
 
+  # The temporary default node pool (removed immediately after cluster creation)
+  # must also satisfy org-policy label requirements or instance creation fails.
+  # resource_labels sets GCP resource labels on the VMs (not Kubernetes labels).
+  node_config {
+    resource_labels = {
+      app        = "all-language"
+      division   = var.label_division
+      team       = var.label_team
+      org        = var.label_org
+      keep-until = var.label_keep_until
+      project    = var.label_project
+    }
+  }
+
   networking_mode = "VPC_NATIVE"
   network         = google_compute_network.vpc.id
   subnetwork      = google_compute_subnetwork.subnet.id
@@ -121,7 +135,14 @@ resource "google_container_node_pool" "primary_nodes" {
       mode = "GKE_METADATA"
     }
 
-    labels = { app = "all-language" }
+    resource_labels = {
+      app        = "all-language"
+      division   = var.label_division
+      team       = var.label_team
+      org        = var.label_org
+      keep-until = var.label_keep_until
+      project    = var.label_project
+    }
   }
 
   management {

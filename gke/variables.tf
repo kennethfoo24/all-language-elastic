@@ -75,3 +75,32 @@ variable "additional_master_authorized_cidrs" {
   description = "Extra CIDRs allowed to reach the Kubernetes API server, in addition to the deployer's IP auto-detected at apply time."
   default     = []
 }
+
+# ---------------------------------------------------------------------------
+# Elastic org-policy labels — required on every Compute Engine instance.
+# All five must be set; division/team/org must match their respective allowlists.
+# ---------------------------------------------------------------------------
+variable "label_division" {
+  type        = string
+  description = "Elastic org-policy label: 'division' (must be in the org allowlist, e.g. 'field')."
+}
+
+variable "label_team" {
+  type        = string
+  description = "Elastic org-policy label: 'team' (must be in the org allowlist, e.g. 'sa')."
+}
+
+variable "label_org" {
+  type        = string
+  description = "Elastic org-policy label: 'org' (must be in the org allowlist, e.g. 'elastic-sa')."
+}
+
+variable "label_keep_until" {
+  type        = string
+  description = "Elastic org-policy label: 'keep-until' date in YYYY-MM-DD format (any value accepted)."
+}
+
+variable "label_project" {
+  type        = string
+  description = "Elastic org-policy label: 'project' — identifies the workload (any value accepted)."
+}
